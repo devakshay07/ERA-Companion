@@ -76,9 +76,10 @@ if __name__ == '__main__':
         y_pos = 200
 
     # Create transparent, frameless window (Larger frame for gestures)
+    import random
     window = webview.create_window(
         'ERA Avatar',
-        'http://localhost:8000/avatar.html',
+        f'http://localhost:8000/avatar.html?v={random.randint(1, 100000)}',
         transparent=True,
         frameless=True,
         on_top=True,
