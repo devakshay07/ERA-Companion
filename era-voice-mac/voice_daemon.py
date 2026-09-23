@@ -191,14 +191,16 @@ async def speak_response(text: str):
                 interrupt_event.set()
                 break
 
-            # Turn ON lip sync exactly when playback starts
-            current_emotion = analyze_emotion(current_sentence_text)
-            set_speaking_flag(True, current_emotion)
-
             proc = play_audio(audio_path)
             if proc is None:
-                set_speaking_flag(False)
                 continue
+
+            # Compensate for afplay CoreAudio hardware initialization latency
+            await asyncio.sleep(0.25)
+            
+            # Turn ON lip sync exactly when the sound actually hits the speakers
+            current_emotion = analyze_emotion(current_sentence_text)
+            set_speaking_flag(True, current_emotion)
 
             # Wait for playback, polling for interrupt
             while proc.poll() is None:

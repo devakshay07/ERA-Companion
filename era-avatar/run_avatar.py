@@ -71,7 +71,7 @@ if __name__ == '__main__':
         import AppKit
         screen = AppKit.NSScreen.mainScreen().frame()
         screen_height = int(screen.size.height)
-        y_pos = screen_height - 800 - 50 # 50px padding from bottom
+        y_pos = screen_height - 900 - 50 # 50px padding from bottom
     except Exception:
         y_pos = 200
 
@@ -82,8 +82,8 @@ if __name__ == '__main__':
         transparent=True,
         frameless=True,
         on_top=True,
-        width=800,
-        height=800,
+        width=1000,
+        height=900,
         x=20,
         y=y_pos
     )

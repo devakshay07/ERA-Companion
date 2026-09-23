@@ -71,8 +71,8 @@
                 vrm.scene.position.y = -scaledBox.min.y;
                 scene.add(vrm.scene);
                 
-                const targetY = scaledBox.max.y - 0.35; // Focus on upper chest/neck
-                camera.position.set(0.0, targetY + 0.1, 1.0); // Pull camera back
+                const targetY = scaledBox.max.y - 0.25; // Focus between chin and chest
+                camera.position.set(0.0, targetY + 0.1, 1.3); // Pull camera further back
                 camera.lookAt(new THREE.Vector3(0, targetY, 0));
 
                 vrm.lookAt.target = lookAtTarget;
