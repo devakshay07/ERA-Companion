@@ -246,38 +246,20 @@
                     if (currentEmotion && targetEmotions[currentEmotion] !== undefined) {
                         targetEmotions[currentEmotion] = 1.0;
                     } else {
-                        // Default resting face (slight smile)
                         targetEmotions['happy'] = 0.3;
                     }
                     
-                    // Lerp and apply each emotion smoothly
                     for (const [emo, targetVal] of Object.entries(targetEmotions)) {
-                        emotionInfluences[emo] = THREE.MathUtils.lerp(emotionInfluences[emo], targetVal, deltaTime * 5.0);
+                        emotionInfluences[emo] = THREE.MathUtils.lerp(emotionInfluences[emo] || 0, targetVal, deltaTime * 5.0);
                         currentVrm.expressionManager.setValue(emo, emotionInfluences[emo]);
                     }
                 }
 
-                // Smooth hand gestures when speaking
-                if (rightUpperArm && rightLowerArm && rightHand) {
-                    let armZ = -1.2;
-                    let armX = 0.0;
-                    let elbowZ = 0.0;
-                    
-                    if (gestureWeight > 0.01) {
-                        // Explaining gesture based on emotion
-                        const speed = currentEmotion === 'angry' ? 5.0 : 3.0;
-                        const amplitude = currentEmotion === 'angry' ? 1.5 : 1.0;
-                        
-                        const wave = Math.sin(time * speed) * gestureWeight * amplitude;
-                        armZ = -1.2 + (0.5 * gestureWeight); 
-                        armX = 0.2 * wave; 
-                        elbowZ = -0.5 * gestureWeight - (0.2 * Math.abs(wave)); 
-                    }
-                    
-                    rightUpperArm.rotation.z = THREE.MathUtils.lerp(rightUpperArm.rotation.z, armZ, deltaTime * 5.0);
-                    rightUpperArm.rotation.x = THREE.MathUtils.lerp(rightUpperArm.rotation.x, armX, deltaTime * 5.0);
-                    rightLowerArm.rotation.z = THREE.MathUtils.lerp(rightLowerArm.rotation.z, elbowZ, deltaTime * 5.0);
-                }
+                // Force arms into a natural resting A-pose instead of a rigid T-pose
+                const leftUpperArm = currentVrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+                if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
+                
+                if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
                 
                 if (currentVrm.springBoneManager) {
                     currentVrm.springBoneManager.update(deltaTime);
