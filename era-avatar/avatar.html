@@ -23,7 +23,8 @@
         camera.position.set(0.0, 1.48, 0.6); // Very close to the face
 
         const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, premultipliedAlpha: false });
-        renderer.setPixelRatio(window.devicePixelRatio); 
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.outputColorSpace = THREE.SRGBColorSpace; 
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.outputEncoding = THREE.sRGBEncoding;
         
@@ -31,10 +32,10 @@
         renderer.toneMapping = THREE.NoToneMapping;
         document.body.appendChild(renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); 
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9); 
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); 
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5); 
         dirLight.position.set(1.0, 1.0, 2.0).normalize();
         scene.add(dirLight);
 
@@ -49,7 +50,7 @@
         });
 
         loader.load(
-            'model/avatar.vrm',
+            'model/avatar.vrm?t=' + new Date().getTime(),
             (gltf) => {
                 const vrm = gltf.userData.vrm;
                 if (!vrm) return;
@@ -70,12 +71,12 @@
                 vrm.scene.position.y = -scaledBox.min.y;
                 scene.add(vrm.scene);
                 
-                const faceY = scaledBox.max.y - 0.15;
-                camera.position.set(0.0, faceY, 0.5); 
-                camera.lookAt(new THREE.Vector3(0, faceY, 0));
+                const targetY = scaledBox.max.y - 0.35; // Focus on upper chest/neck
+                camera.position.set(0.0, targetY + 0.1, 1.0); // Pull camera back
+                camera.lookAt(new THREE.Vector3(0, targetY, 0));
 
                 vrm.lookAt.target = lookAtTarget;
-                lookAtTarget.position.set(0, faceY, 2.0);
+                lookAtTarget.position.set(0, targetY, 2.0);
                 vrm.scene.rotation.y = Math.PI;
                 
                 const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
