@@ -9,11 +9,19 @@
     </style>
 </head>
 <body>
+    <div id="debug" style="position:absolute; top:0; left:0; color:red; font-size:20px; z-index:9999; background:rgba(0,0,0,0.5); padding:10px;"></div>
     <script src="https://unpkg.com/three@0.146.0/build/three.js"></script>
     <script src="https://unpkg.com/three@0.146.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://unpkg.com/@pixiv/three-vrm@1.0.9/lib/three-vrm.js"></script>
     
     <script>
+        function logError(msg) {
+            document.getElementById('debug').innerHTML += msg + '<br>';
+        }
+        window.onerror = function(m, s, l, c, err) { 
+            logError(m + '<br>' + (err ? err.stack : '')); 
+            return false;
+        };
         // Setup scene
         const scene = new THREE.Scene();
         scene.background = null;
@@ -75,9 +83,12 @@
                     }
                     
                     const vrm = gltf.userData.vrm;
-                    if (!vrm) return;
+                    if (!vrm) {
+                        logError("Missing VRM payload in glTF. Cannot initialize character.");
+                        return;
+                    }
                     
-                    THREE_VRM.VRMUtils.removeUnnecessaryJoints(gltf.scene);
+                    // THREE_VRM.VRMUtils.removeUnnecessaryJoints(gltf.scene); // Disabled because it deletes Blender-exported root nodes
                     currentVrm = vrm;
                     
                     // Standard VRM models are 1 unit = 1 meter. No need to auto-scale.
@@ -99,6 +110,12 @@
                     if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
                     const rightUpperArm = currentVrm.humanoid.getNormalizedBoneNode('rightUpperArm');
                     if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
+                    
+                    logError("Model loaded successfully: " + url);
+                },
+                undefined,
+                (err) => {
+                    logError("GLTF Parse Error: " + err);
                 }
             );
         }
