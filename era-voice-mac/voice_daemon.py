@@ -107,19 +107,27 @@ def analyze_emotion(text: str) -> str:
         return "surprised"
     return "neutral"
 
-def set_speaking(active: bool, emotion: str = "neutral"):
-    """Signal to STT whether we are currently speaking, and with what emotion."""
+def set_speaking_flag(active: bool, emotion: str = "neutral"):
+    """Controls the visual lip sync flag for the 3D avatar."""
     if active:
         with open(SPEAKING_FLAG, "w") as f:
             f.write(emotion)
+    else:
+        try:
+            os.remove(SPEAKING_FLAG)
+        except FileNotFoundError:
+            pass
+
+def set_lock_flag(active: bool):
+    """Controls the STT lock to prevent echo cancellation."""
+    if active:
         with open(LOCK_FILE, "w") as f:
             f.write("1")
     else:
-        for f in [SPEAKING_FLAG, LOCK_FILE]:
-            try:
-                os.remove(f)
-            except FileNotFoundError:
-                pass
+        try:
+            os.remove(LOCK_FILE)
+        except FileNotFoundError:
+            pass
 
 def check_interrupt() -> bool:
     """Check if the STT daemon has signaled a voice interrupt."""
@@ -138,7 +146,7 @@ async def speak_response(text: str):
         return
 
     log_info("speaking_start", sentence_count=len(sentences))
-    set_speaking(True, analyze_emotion(sentences[0]))
+    set_lock_flag(True)
 
     check_interrupt()  # clear stale
     tmp_dir = tempfile.mkdtemp(prefix="era_tts_")
@@ -172,11 +180,6 @@ async def speak_response(text: str):
                 
             audio_path, current_sentence_text = item
             
-            # Update emotion for this specific sentence
-            current_emotion = analyze_emotion(current_sentence_text)
-            with open(SPEAKING_FLAG, "w") as f:
-                f.write(current_emotion)
-            
             # Write current sentence to file for STT to read (Echo Cancellation)
             try:
                 with open(os.path.join(VOICE_DIR, ".era_current_sentence"), "w") as f:
@@ -188,8 +191,13 @@ async def speak_response(text: str):
                 interrupt_event.set()
                 break
 
+            # Turn ON lip sync exactly when playback starts
+            current_emotion = analyze_emotion(current_sentence_text)
+            set_speaking_flag(True, current_emotion)
+
             proc = play_audio(audio_path)
             if proc is None:
+                set_speaking_flag(False)
                 continue
 
             # Wait for playback, polling for interrupt
@@ -198,8 +206,12 @@ async def speak_response(text: str):
                     interrupt_event.set()
                     proc.kill()
                     proc.wait()
+                    set_speaking_flag(False)
                     return
                 await asyncio.sleep(0.05)
+                
+            # Turn OFF lip sync between sentences
+            set_speaking_flag(False)
 
     try:
         # Run generator and player concurrently
@@ -210,7 +222,8 @@ async def speak_response(text: str):
     except Exception as e:
         log_error("speaking_error", error=str(e))
     finally:
-        set_speaking(False)
+        set_lock_flag(False)
+        set_speaking_flag(False)
         for f in generated_files:
             try:
                 os.remove(f)
