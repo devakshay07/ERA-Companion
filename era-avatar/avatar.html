@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ERA Avatar</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: transparent; font-family: monospace; cursor: pointer; }
+        canvas { display: block; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1;}
+    </style>
+</head>
+<body>
+    <script src="https://unpkg.com/three@0.146.0/build/three.js"></script>
+    <script src="https://unpkg.com/three@0.146.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm@1.0.9/lib/three-vrm.js"></script>
+    
+    <script>
+        // Setup scene
+        const scene = new THREE.Scene();
+        scene.background = null;
+
+        // Camera setup (Adjusted for Full Body dancing)
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 20.0);
+        camera.position.set(0.0, 0.2, 3.8); // Moved slightly closer so she takes up more space
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, premultipliedAlpha: false });
+        renderer.setPixelRatio(window.devicePixelRatio); // CRITICAL for Mac Retina displays (fixes bad quality)
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        
+        // No tone mapping! ACESFilmic intentionally desaturates colors to look 'cinematic'. 
+        // For anime models, this causes them to look pale and faded.
+        renderer.toneMapping = THREE.NoToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        // Clean, bright lighting to let the raw texture colors pop
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); 
+        dirLight.position.set(-2.0, 2.0, 3.0).normalize();
+        scene.add(dirLight);
+
+        let currentModel = undefined;
+        let mixer = undefined;
+        let animations = [];
+        let currentAnimIndex = 10; // Start with Happy Dance
+        let currentAction = undefined;
+
+        const loader = new THREE.GLTFLoader();
+
+        loader.load(
+            'new_model/H4054EZGP96J1HOA08T7Z836N.glb',
+            (gltf) => {
+                currentModel = gltf.scene;
+                
+                // Fix the "plastic" look and ensure maximum color saturation
+                currentModel.traverse((node) => {
+                    if (node.isMesh && node.material) {
+                        node.material.roughness = 1.0; 
+                        node.material.metalness = 0.0;
+                        
+                        // Force sRGB color space on every texture to prevent washed-out linear colors
+                        if (node.material.map) {
+                            node.material.map.encoding = THREE.sRGBEncoding;
+                            node.material.map.needsUpdate = true;
+                        }
+                    }
+                });
+
+                // Auto-scale model based on its bounding box
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                
+                // Scale it so its maximum dimension is exactly 1.6 units (standard human height)
+                const scale = 1.6 / maxDim;
+                currentModel.scale.set(scale, scale, scale);
+                
+                // Center the model at the bottom
+                const scaledBox = new THREE.Box3().setFromObject(currentModel);
+                currentModel.position.y = -scaledBox.min.y - 1.0; // Anchored slightly below center
+
+                scene.add(currentModel);
+                
+                animations = gltf.animations;
+                if (animations && animations.length > 0) {
+                    mixer = new THREE.AnimationMixer(currentModel);
+                    console.log("Found", animations.length, "animations.");
+                    
+                    // Play initial animation
+                    currentAction = mixer.clipAction(animations[currentAnimIndex]);
+                    currentAction.play();
+                } else {
+                    console.error("No animations found in GLB!");
+                }
+            },
+            (progress) => {
+                if (progress.total > 0) {
+                    console.log('Loading GLB: ' + Math.round(100.0 * (progress.loaded / progress.total)) + '%');
+                }
+            },
+            (error) => {
+                console.error("LOAD ERROR: " + error);
+            }
+        );
+
+        // Click to change animation
+        window.addEventListener('pointerdown', (event) => {
+            if (!mixer || animations.length === 0) return;
+            
+            // Fade to next random animation
+            let nextIndex = Math.floor(Math.random() * animations.length);
+            if (nextIndex === currentAnimIndex) nextIndex = (nextIndex + 1) % animations.length;
+            
+            const nextAction = mixer.clipAction(animations[nextIndex]);
+            nextAction.reset();
+            nextAction.play();
+            
+            if (currentAction) {
+                currentAction.crossFadeTo(nextAction, 0.5, true);
+            }
+            
+            currentAction = nextAction;
+            currentAnimIndex = nextIndex;
+            console.log("Playing animation:", animations[currentAnimIndex].name);
+        });
+
+        // Track mouse for basic model rotation (not bone IK, just rotating the whole body slightly)
+        const targetRotation = new THREE.Vector2(); 
+        let currentRotX = 0;
+
+        window.addEventListener('mousemove', (event) => {
+            const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+            targetRotation.x = mouseX * 0.5; // Turn body slightly towards mouse
+        });
+
+        // State Bridge (Lip sync removed, but we keep state listener active)
+        let isSpeaking = false;
+        async function pollState() {
+            try {
+                const response = await fetch('state.json?t=' + new Date().getTime());
+                const data = await response.json();
+                isSpeaking = data.speaking;
+            } catch(e) { }
+            setTimeout(pollState, 100);
+        }
+        pollState();
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+            
+            if (mixer) {
+                mixer.update(deltaTime);
+            }
+
+            if (currentModel) {
+                // Smoothly rotate entire model towards mouse
+                currentRotX = THREE.MathUtils.lerp(currentRotX, targetRotation.x, deltaTime * 5.0);
+                currentModel.rotation.y = currentRotX;
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# ERA Voice & Avatar Engine Requirements
+# Platform: macOS, Windows, Linux
+
+# Voice Engine
+SpeechRecognition==3.10.1
+edge-tts==6.1.12
+pydub==0.25.1
+simpleaudio==1.0.4
+
+# Avatar Engine
+pywebview==5.3
