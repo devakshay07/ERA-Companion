@@ -36,21 +36,23 @@ def start_server_and_bridge():
         json.dump({"speaking": False, "emotion": "neutral"}, f)
         
     last_state = None
+    current_emotion = "neutral"
+    
     while True:
         try:
             if os.path.exists(SPEAKING_FLAG):
                 try:
                     with open(SPEAKING_FLAG, 'r') as sf:
-                        emotion = sf.read().strip()
-                        if not emotion: emotion = "neutral"
+                        read_emotion = sf.read().strip()
+                        if read_emotion: 
+                            current_emotion = read_emotion
                 except:
-                    emotion = "neutral"
+                    pass
                 is_speaking = True
             else:
                 is_speaking = False
-                emotion = "neutral"
                 
-            current_state = {"speaking": is_speaking, "emotion": emotion}
+            current_state = {"speaking": is_speaking, "emotion": current_emotion}
             if current_state != last_state:
                 with open(STATE_FILE, 'w') as f:
                     json.dump(current_state, f)
