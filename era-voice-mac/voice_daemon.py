@@ -94,11 +94,24 @@ def play_audio(audio_path: str) -> subprocess.Popen | None:
         return None
 
 
-def set_speaking(active: bool):
-    """Signal to STT whether we are currently speaking."""
+def analyze_emotion(text: str) -> str:
+    """Simple keyword-based sentiment analysis for ERA's persona."""
+    text = text.lower()
+    if re.search(r'\b(idiot|stupid|hell|crap|fuck|damn|stop|bad|worst|hate)\b', text):
+        return "angry"
+    if re.search(r'\b(boom|success|perfect|brilliant|done|fixed|exactly|love|nice|haha|zero|hacker|cute|lol|lmao|boss)\b', text):
+        return "happy"
+    if re.search(r'\b(failed|error|sorry|unfortunately|broken|bad news|sad)\b', text):
+        return "sad"
+    if re.search(r'\b(wait|what|whoa|huh|oh)\b', text):
+        return "surprised"
+    return "neutral"
+
+def set_speaking(active: bool, emotion: str = "neutral"):
+    """Signal to STT whether we are currently speaking, and with what emotion."""
     if active:
         with open(SPEAKING_FLAG, "w") as f:
-            f.write("1")
+            f.write(emotion)
         with open(LOCK_FILE, "w") as f:
             f.write("1")
     else:
@@ -107,7 +120,6 @@ def set_speaking(active: bool):
                 os.remove(f)
             except FileNotFoundError:
                 pass
-
 
 def check_interrupt() -> bool:
     """Check if the STT daemon has signaled a voice interrupt."""
@@ -119,7 +131,6 @@ def check_interrupt() -> bool:
         return True
     return False
 
-
 async def speak_response(text: str):
     """Stream-speak a full response by pre-buffering the next sentence."""
     sentences = split_into_sentences(text)
@@ -127,7 +138,7 @@ async def speak_response(text: str):
         return
 
     log_info("speaking_start", sentence_count=len(sentences))
-    set_speaking(True)
+    set_speaking(True, analyze_emotion(sentences[0]))
 
     check_interrupt()  # clear stale
     tmp_dir = tempfile.mkdtemp(prefix="era_tts_")
@@ -160,6 +171,11 @@ async def speak_response(text: str):
                 break
                 
             audio_path, current_sentence_text = item
+            
+            # Update emotion for this specific sentence
+            current_emotion = analyze_emotion(current_sentence_text)
+            with open(SPEAKING_FLAG, "w") as f:
+                f.write(current_emotion)
             
             # Write current sentence to file for STT to read (Echo Cancellation)
             try:

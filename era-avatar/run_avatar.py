@@ -33,16 +33,28 @@ def start_server_and_bridge():
     
     # State Bridge Loop
     with open(STATE_FILE, 'w') as f:
-        json.dump({"speaking": False}, f)
+        json.dump({"speaking": False, "emotion": "neutral"}, f)
         
     last_state = None
     while True:
         try:
-            is_speaking = os.path.exists(SPEAKING_FLAG)
-            if is_speaking != last_state:
+            if os.path.exists(SPEAKING_FLAG):
+                try:
+                    with open(SPEAKING_FLAG, 'r') as sf:
+                        emotion = sf.read().strip()
+                        if not emotion: emotion = "neutral"
+                except:
+                    emotion = "neutral"
+                is_speaking = True
+            else:
+                is_speaking = False
+                emotion = "neutral"
+                
+            current_state = {"speaking": is_speaking, "emotion": emotion}
+            if current_state != last_state:
                 with open(STATE_FILE, 'w') as f:
-                    json.dump({"speaking": is_speaking}, f)
-                last_state = is_speaking
+                    json.dump(current_state, f)
+                last_state = current_state
             time.sleep(0.05)
         except Exception:
             time.sleep(0.5)

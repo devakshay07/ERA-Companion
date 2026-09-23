@@ -132,11 +132,14 @@
         }
 
         let isSpeaking = false;
+        let currentEmotion = "neutral";
+        
         async function pollState() {
             try {
                 const response = await fetch('state.json?t=' + new Date().getTime());
                 const data = await response.json();
                 isSpeaking = data.speaking;
+                currentEmotion = data.emotion || "neutral";
             } catch(e) { }
             setTimeout(pollState, 100);
         }
@@ -153,6 +156,11 @@
         // Smooth values for gestures
         let gestureWeight = 0;
         let currentNod = 0;
+        
+        // Emotion blending state
+        const emotionInfluences = {
+            'happy': 0.3, 'angry': 0, 'sad': 0, 'surprised': 0, 'relaxed': 0
+        };
 
         function animate() {
             requestAnimationFrame(animate);
@@ -178,13 +186,12 @@
                 const rightLowerArm = currentVrm.humanoid.getNormalizedBoneNode('rightLowerArm');
                 const rightHand = currentVrm.humanoid.getNormalizedBoneNode('rightHand');
 
-                // Organic Idle Sway (Breathing & weight shifting)
+                // Organic Idle Sway
                 if (hips && spine && chest && head && neck) {
                     hips.position.x = Math.sin(time * 0.5) * 0.02;
                     spine.rotation.z = Math.sin(time * 0.5) * 0.02;
-                    chest.rotation.x = Math.sin(time * 1.5) * 0.01; // Breathing
+                    chest.rotation.x = Math.sin(time * 1.5) * 0.01; 
                     
-                    // Head follows mouse + organic drift
                     const driftX = Math.sin(time * 0.7) * 0.03;
                     const driftY = Math.cos(time * 1.1) * 0.03;
                     
@@ -200,55 +207,70 @@
                 let targetNod = 0;
                 
                 if (isSpeaking) {
-                    // Combine non-harmonic sine waves to simulate random syllables (speech envelope)
                     const talkSpeed = 16.0;
                     const speechWave = (Math.sin(time * talkSpeed) + Math.sin(time * talkSpeed * 1.4) + Math.sin(time * talkSpeed * 0.6)) / 3.0;
                     
                     if (speechWave > 0.3) {
-                        targetA = speechWave; // Open mouth (A)
+                        targetA = speechWave; 
                     } else if (speechWave > -0.2) {
-                        targetE = Math.abs(speechWave) * 1.5; // Wide mouth (E)
+                        targetE = Math.abs(speechWave) * 1.5; 
                     } else {
-                        targetO = Math.abs(speechWave); // Round mouth (O)
+                        targetO = Math.abs(speechWave); 
                     }
                     
-                    // Smooth head emphasis on loud syllables
-                    if (speechWave > 0.6) {
-                        targetNod = -0.05; // Target nod angle
-                    }
+                    if (speechWave > 0.6) targetNod = -0.05; 
                 }
                 
-                // Smoothly blend lip and gesture values
+                // Blend lip and gesture values
                 currentA = THREE.MathUtils.lerp(currentA, targetA, deltaTime * 20.0);
                 currentE = THREE.MathUtils.lerp(currentE, targetE, deltaTime * 20.0);
                 currentO = THREE.MathUtils.lerp(currentO, targetO, deltaTime * 20.0);
                 gestureWeight = THREE.MathUtils.lerp(gestureWeight, targetGesture, deltaTime * 3.0);
-                currentNod = THREE.MathUtils.lerp(currentNod, targetNod, deltaTime * 12.0); // Smooth nod interpolation
+                currentNod = THREE.MathUtils.lerp(currentNod, targetNod, deltaTime * 12.0); 
                 
-                // Apply the smooth nod to the head
                 if (head) {
                     head.rotation.x += currentNod;
                 }
                 
+                // Process Emotion Targets
                 if (currentVrm.expressionManager) {
                     currentVrm.expressionManager.setValue('aa', currentA);
                     currentVrm.expressionManager.setValue('ee', currentE);
                     currentVrm.expressionManager.setValue('oh', currentO);
+                    
+                    const targetEmotions = {
+                        'happy': 0, 'angry': 0, 'sad': 0, 'surprised': 0, 'relaxed': 0
+                    };
+                    
+                    if (currentEmotion && targetEmotions[currentEmotion] !== undefined) {
+                        targetEmotions[currentEmotion] = 1.0;
+                    } else {
+                        // Default resting face (slight smile)
+                        targetEmotions['happy'] = 0.3;
+                    }
+                    
+                    // Lerp and apply each emotion smoothly
+                    for (const [emo, targetVal] of Object.entries(targetEmotions)) {
+                        emotionInfluences[emo] = THREE.MathUtils.lerp(emotionInfluences[emo], targetVal, deltaTime * 5.0);
+                        currentVrm.expressionManager.setValue(emo, emotionInfluences[emo]);
+                    }
                 }
 
                 // Smooth hand gestures when speaking
                 if (rightUpperArm && rightLowerArm && rightHand) {
-                    // Base resting position
                     let armZ = -1.2;
                     let armX = 0.0;
                     let elbowZ = 0.0;
                     
                     if (gestureWeight > 0.01) {
-                        // Explaining gesture
-                        const wave = Math.sin(time * 3.0) * gestureWeight;
-                        armZ = -1.2 + (0.5 * gestureWeight); // Raise arm
-                        armX = 0.2 * wave; // Move forward/back
-                        elbowZ = -0.5 * gestureWeight - (0.2 * Math.abs(wave)); // Bend elbow
+                        // Explaining gesture based on emotion
+                        const speed = currentEmotion === 'angry' ? 5.0 : 3.0;
+                        const amplitude = currentEmotion === 'angry' ? 1.5 : 1.0;
+                        
+                        const wave = Math.sin(time * speed) * gestureWeight * amplitude;
+                        armZ = -1.2 + (0.5 * gestureWeight); 
+                        armX = 0.2 * wave; 
+                        elbowZ = -0.5 * gestureWeight - (0.2 * Math.abs(wave)); 
                     }
                     
                     rightUpperArm.rotation.z = THREE.MathUtils.lerp(rightUpperArm.rotation.z, armZ, deltaTime * 5.0);
