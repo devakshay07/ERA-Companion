@@ -18,123 +18,119 @@
         const scene = new THREE.Scene();
         scene.background = null;
 
-        // Camera setup (Adjusted for Full Body dancing)
-        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 20.0);
-        camera.position.set(0.0, 0.2, 3.8); // Moved slightly closer so she takes up more space
+        // Camera setup (Extreme close-up on the face)
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 20.0);
+        camera.position.set(0.0, 1.48, 0.6); // Very close to the face
 
         const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, premultipliedAlpha: false });
-        renderer.setPixelRatio(window.devicePixelRatio); // CRITICAL for Mac Retina displays (fixes bad quality)
+        renderer.setPixelRatio(window.devicePixelRatio); 
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.outputEncoding = THREE.sRGBEncoding;
         
-        // No tone mapping! ACESFilmic intentionally desaturates colors to look 'cinematic'. 
-        // For anime models, this causes them to look pale and faded.
+        // Remove ACESFilmic to keep anime colors punchy
         renderer.toneMapping = THREE.NoToneMapping;
         document.body.appendChild(renderer.domElement);
 
-        // Clean, bright lighting to let the raw texture colors pop
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); 
         scene.add(ambientLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); 
-        dirLight.position.set(-2.0, 2.0, 3.0).normalize();
+        dirLight.position.set(1.0, 1.0, 2.0).normalize();
         scene.add(dirLight);
 
-        let currentModel = undefined;
-        let mixer = undefined;
-        let animations = [];
-        let currentAnimIndex = 10; // Start with Happy Dance
-        let currentAction = undefined;
+        let currentVrm = undefined;
+        let lookAtTarget = new THREE.Object3D();
+        scene.add(lookAtTarget);
 
         const loader = new THREE.GLTFLoader();
+        
+        loader.register((parser) => {
+            return new THREE_VRM.VRMLoaderPlugin(parser);
+        });
 
         loader.load(
-            'new_model/H4054EZGP96J1HOA08T7Z836N.glb',
+            'model/avatar.vrm',
             (gltf) => {
-                currentModel = gltf.scene;
+                const vrm = gltf.userData.vrm;
+                if (!vrm) return;
                 
-                // Fix the "plastic" look and ensure maximum color saturation
-                currentModel.traverse((node) => {
-                    if (node.isMesh && node.material) {
-                        node.material.roughness = 1.0; 
-                        node.material.metalness = 0.0;
-                        
-                        // Force sRGB color space on every texture to prevent washed-out linear colors
-                        if (node.material.map) {
-                            node.material.map.encoding = THREE.sRGBEncoding;
-                            node.material.map.needsUpdate = true;
-                        }
-                    }
-                });
+                THREE_VRM.VRMUtils.removeUnnecessaryJoints(gltf.scene);
 
+                currentVrm = vrm;
+                
                 // Auto-scale model based on its bounding box
-                const box = new THREE.Box3().setFromObject(currentModel);
+                const box = new THREE.Box3().setFromObject(vrm.scene);
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z);
                 
-                // Scale it so its maximum dimension is exactly 1.6 units (standard human height)
                 const scale = 1.6 / maxDim;
-                currentModel.scale.set(scale, scale, scale);
+                vrm.scene.scale.set(scale, scale, scale);
                 
-                // Center the model at the bottom
-                const scaledBox = new THREE.Box3().setFromObject(currentModel);
-                currentModel.position.y = -scaledBox.min.y - 1.0; // Anchored slightly below center
+                const scaledBox = new THREE.Box3().setFromObject(vrm.scene);
+                vrm.scene.position.y = -scaledBox.min.y;
+                scene.add(vrm.scene);
+                
+                const faceY = scaledBox.max.y - 0.15;
+                camera.position.set(0.0, faceY, 0.5); 
+                camera.lookAt(new THREE.Vector3(0, faceY, 0));
 
-                scene.add(currentModel);
+                vrm.lookAt.target = lookAtTarget;
+                lookAtTarget.position.set(0, faceY, 2.0);
+                vrm.scene.rotation.y = Math.PI;
                 
-                animations = gltf.animations;
-                if (animations && animations.length > 0) {
-                    mixer = new THREE.AnimationMixer(currentModel);
-                    console.log("Found", animations.length, "animations.");
-                    
-                    // Play initial animation
-                    currentAction = mixer.clipAction(animations[currentAnimIndex]);
-                    currentAction.play();
-                } else {
-                    console.error("No animations found in GLB!");
+                const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+                const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                if (leftUpperArm && rightUpperArm) {
+                    leftUpperArm.rotation.z = 1.2;
+                    rightUpperArm.rotation.z = -1.2;
                 }
-            },
-            (progress) => {
-                if (progress.total > 0) {
-                    console.log('Loading GLB: ' + Math.round(100.0 * (progress.loaded / progress.total)) + '%');
+
+                if (vrm.expressionManager) {
+                    vrm.expressionManager.setValue('happy', 0.4); // VRM 1.0 uses 'happy'
                 }
-            },
-            (error) => {
-                console.error("LOAD ERROR: " + error);
             }
         );
 
-        // Click to change animation
-        window.addEventListener('pointerdown', (event) => {
-            if (!mixer || animations.length === 0) return;
-            
-            // Fade to next random animation
-            let nextIndex = Math.floor(Math.random() * animations.length);
-            if (nextIndex === currentAnimIndex) nextIndex = (nextIndex + 1) % animations.length;
-            
-            const nextAction = mixer.clipAction(animations[nextIndex]);
-            nextAction.reset();
-            nextAction.play();
-            
-            if (currentAction) {
-                currentAction.crossFadeTo(nextAction, 0.5, true);
-            }
-            
-            currentAction = nextAction;
-            currentAnimIndex = nextIndex;
-            console.log("Playing animation:", animations[currentAnimIndex].name);
-        });
-
-        // Track mouse for basic model rotation (not bone IK, just rotating the whole body slightly)
+        const mouse = new THREE.Vector2();
         const targetRotation = new THREE.Vector2(); 
-        let currentRotX = 0;
-
+        
         window.addEventListener('mousemove', (event) => {
-            const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-            targetRotation.x = mouseX * 0.5; // Turn body slightly towards mouse
+            if (!currentVrm) return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            targetRotation.x = mouse.x * 0.15;
+            targetRotation.y = mouse.y * 0.1;
         });
 
-        // State Bridge (Lip sync removed, but we keep state listener active)
+        const clock = new THREE.Clock();
+        let blinkTimer = 0;
+        let isBlinking = false;
+        
+        function updateBlink(deltaTime) {
+            if (!currentVrm || !currentVrm.expressionManager) return;
+            
+            blinkTimer += deltaTime;
+            if (isBlinking) {
+                if (blinkTimer > 0.1) {
+                    currentVrm.expressionManager.setValue('blink', 0.0);
+                    currentVrm.expressionManager.setValue('blinkLeft', 0.0);
+                    isBlinking = false;
+                    blinkTimer = 0;
+                }
+            } else {
+                if (blinkTimer > 2.5 + Math.random() * 4.0) {
+                    if (Math.random() < 0.15) {
+                        currentVrm.expressionManager.setValue('blinkLeft', 1.0);
+                    } else {
+                        currentVrm.expressionManager.setValue('blink', 1.0);
+                    }
+                    isBlinking = true;
+                    blinkTimer = 0;
+                }
+            }
+        }
+
         let isSpeaking = false;
         async function pollState() {
             try {
@@ -146,22 +142,126 @@
         }
         pollState();
 
-        const clock = new THREE.Clock();
+        let currentRotX = 0;
+        let currentRotY = 0;
+        
+        // Smooth values for lip sync
+        let currentA = 0;
+        let currentE = 0;
+        let currentO = 0;
+        
+        // Smooth values for gestures
+        let gestureWeight = 0;
+        let currentNod = 0;
 
         function animate() {
             requestAnimationFrame(animate);
             const deltaTime = clock.getDelta();
+            const time = clock.elapsedTime;
             
-            if (mixer) {
-                mixer.update(deltaTime);
-            }
-
-            if (currentModel) {
-                // Smoothly rotate entire model towards mouse
+            if (currentVrm) {
+                updateBlink(deltaTime);
+                
                 currentRotX = THREE.MathUtils.lerp(currentRotX, targetRotation.x, deltaTime * 5.0);
-                currentModel.rotation.y = currentRotX;
-            }
+                currentRotY = THREE.MathUtils.lerp(currentRotY, targetRotation.y, deltaTime * 5.0);
+                
+                lookAtTarget.position.x = currentRotX * 3.0;
+                lookAtTarget.position.y = camera.position.y + (currentRotY * 3.0);
+                lookAtTarget.position.z = 2.0;
 
+                const hips = currentVrm.humanoid.getNormalizedBoneNode('hips');
+                const spine = currentVrm.humanoid.getNormalizedBoneNode('spine');
+                const chest = currentVrm.humanoid.getNormalizedBoneNode('chest');
+                const neck = currentVrm.humanoid.getNormalizedBoneNode('neck');
+                const head = currentVrm.humanoid.getNormalizedBoneNode('head');
+                const rightUpperArm = currentVrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                const rightLowerArm = currentVrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+                const rightHand = currentVrm.humanoid.getNormalizedBoneNode('rightHand');
+
+                // Organic Idle Sway (Breathing & weight shifting)
+                if (hips && spine && chest && head && neck) {
+                    hips.position.x = Math.sin(time * 0.5) * 0.02;
+                    spine.rotation.z = Math.sin(time * 0.5) * 0.02;
+                    chest.rotation.x = Math.sin(time * 1.5) * 0.01; // Breathing
+                    
+                    // Head follows mouse + organic drift
+                    const driftX = Math.sin(time * 0.7) * 0.03;
+                    const driftY = Math.cos(time * 1.1) * 0.03;
+                    
+                    neck.rotation.y = currentRotX * 0.4 + driftX;
+                    neck.rotation.x = -currentRotY * 0.4 + driftY;
+                    head.rotation.y = currentRotX * 0.4;
+                    head.rotation.x = -currentRotY * 0.4;
+                }
+
+                // Procedural Lip Sync & Gestures
+                let targetA = 0, targetE = 0, targetO = 0;
+                let targetGesture = isSpeaking ? 1.0 : 0.0;
+                let targetNod = 0;
+                
+                if (isSpeaking) {
+                    // Combine non-harmonic sine waves to simulate random syllables (speech envelope)
+                    const talkSpeed = 16.0;
+                    const speechWave = (Math.sin(time * talkSpeed) + Math.sin(time * talkSpeed * 1.4) + Math.sin(time * talkSpeed * 0.6)) / 3.0;
+                    
+                    if (speechWave > 0.3) {
+                        targetA = speechWave; // Open mouth (A)
+                    } else if (speechWave > -0.2) {
+                        targetE = Math.abs(speechWave) * 1.5; // Wide mouth (E)
+                    } else {
+                        targetO = Math.abs(speechWave); // Round mouth (O)
+                    }
+                    
+                    // Smooth head emphasis on loud syllables
+                    if (speechWave > 0.6) {
+                        targetNod = -0.05; // Target nod angle
+                    }
+                }
+                
+                // Smoothly blend lip and gesture values
+                currentA = THREE.MathUtils.lerp(currentA, targetA, deltaTime * 20.0);
+                currentE = THREE.MathUtils.lerp(currentE, targetE, deltaTime * 20.0);
+                currentO = THREE.MathUtils.lerp(currentO, targetO, deltaTime * 20.0);
+                gestureWeight = THREE.MathUtils.lerp(gestureWeight, targetGesture, deltaTime * 3.0);
+                currentNod = THREE.MathUtils.lerp(currentNod, targetNod, deltaTime * 12.0); // Smooth nod interpolation
+                
+                // Apply the smooth nod to the head
+                if (head) {
+                    head.rotation.x += currentNod;
+                }
+                
+                if (currentVrm.expressionManager) {
+                    currentVrm.expressionManager.setValue('aa', currentA);
+                    currentVrm.expressionManager.setValue('ee', currentE);
+                    currentVrm.expressionManager.setValue('oh', currentO);
+                }
+
+                // Smooth hand gestures when speaking
+                if (rightUpperArm && rightLowerArm && rightHand) {
+                    // Base resting position
+                    let armZ = -1.2;
+                    let armX = 0.0;
+                    let elbowZ = 0.0;
+                    
+                    if (gestureWeight > 0.01) {
+                        // Explaining gesture
+                        const wave = Math.sin(time * 3.0) * gestureWeight;
+                        armZ = -1.2 + (0.5 * gestureWeight); // Raise arm
+                        armX = 0.2 * wave; // Move forward/back
+                        elbowZ = -0.5 * gestureWeight - (0.2 * Math.abs(wave)); // Bend elbow
+                    }
+                    
+                    rightUpperArm.rotation.z = THREE.MathUtils.lerp(rightUpperArm.rotation.z, armZ, deltaTime * 5.0);
+                    rightUpperArm.rotation.x = THREE.MathUtils.lerp(rightUpperArm.rotation.x, armX, deltaTime * 5.0);
+                    rightLowerArm.rotation.z = THREE.MathUtils.lerp(rightLowerArm.rotation.z, elbowZ, deltaTime * 5.0);
+                }
+                
+                if (currentVrm.springBoneManager) {
+                    currentVrm.springBoneManager.update(deltaTime);
+                }
+
+                currentVrm.update(deltaTime);
+            }
             renderer.render(scene, camera);
         }
         animate();
