@@ -72,7 +72,7 @@ if __name__ == "__main__":
 PYEOF
 
 cp stt_hacker.py ~/.gemini/antigravity/era_voice/stt_hacker.py
-sed -i '' "s|/Users/akshaybhagat/Documents/ERA'S ARENA/.era.lock|/Users/akshaybhagat/.gemini/antigravity/era_voice/.era.lock|g" ~/.gemini/antigravity/era_voice/stt_hacker.py
+sed -i '' "s|~/.gemini/antigravity/era_voice/.era.lock|~/.gemini/antigravity/era_voice/.era.lock|g" ~/.gemini/antigravity/era_voice/stt_hacker.py
 
 echo "Installation complete."
 echo "To run the global voice daemon anywhere, open a terminal and run:"

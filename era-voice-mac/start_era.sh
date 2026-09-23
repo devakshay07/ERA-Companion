@@ -1,6 +1,6 @@
 #!/bin/bash
 # Use the python from our virtual environment that has mlx-whisper installed
-PYTHON_EXEC="/Users/akshaybhagat/Documents/ERA'S ARENA/.venv/bin/python"
+PYTHON_EXEC="python3"
 BASE_DIR="$HOME/.gemini/antigravity/era_voice"
 
 # Start Voice Daemon
