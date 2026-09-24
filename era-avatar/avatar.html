@@ -212,9 +212,25 @@
             const time = clock.elapsedTime;
             
             if (currentVrm) {
-                // Dynamic Camera Framing based on speech state
-                let targetCamZ = isSpeaking ? 1.3 : 3.2;
-                let targetLookY = isSpeaking ? baseTargetY : (baseTargetY * 0.6); // Look lower for full body
+                // Dynamic Cinematic Camera Framing based on speech and emotion
+                let targetCamZ = 3.2; // Default full body
+                let targetLookY = baseTargetY * 0.6; // Default look at waist
+                
+                if (isSpeaking) {
+                    if (currentEmotion === "angry") {
+                        targetCamZ = 0.7; // Extreme close-up (eyes and lips)
+                        targetLookY = baseTargetY + 0.1; // Tilt up to face
+                    } else if (currentEmotion === "surprised") {
+                        targetCamZ = 0.9; // Very close
+                        targetLookY = baseTargetY + 0.05;
+                    } else if (currentEmotion === "sad") {
+                        targetCamZ = 1.8; // Pulled back, distant
+                        targetLookY = baseTargetY - 0.1;
+                    } else { // happy, neutral, relaxed
+                        targetCamZ = 1.3; // Standard conversational
+                        targetLookY = baseTargetY;
+                    }
+                }
 
                 currentCamZ = THREE.MathUtils.lerp(currentCamZ, targetCamZ, deltaTime * 2.0);
                 currentLookY = THREE.MathUtils.lerp(currentLookY, targetLookY, deltaTime * 2.0);
