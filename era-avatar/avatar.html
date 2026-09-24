@@ -315,7 +315,11 @@
                     };
                     
                     if (currentEmotion && targetEmotions[currentEmotion] !== undefined) {
-                        targetEmotions[currentEmotion] = 1.0;
+                        if (currentEmotion === "happy") {
+                            targetEmotions[currentEmotion] = 0.35; // Cap the smile intensity so the mouth doesn't rip open
+                        } else {
+                            targetEmotions[currentEmotion] = 1.0;
+                        }
                     }
                     
                     for (const [emo, targetVal] of Object.entries(targetEmotions)) {
