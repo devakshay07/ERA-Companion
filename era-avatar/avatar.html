@@ -218,8 +218,8 @@
                 
                 if (isSpeaking) {
                     if (currentEmotion === "intense") {
-                        targetCamZ = 0.55; // Maximum extreme close-up (fills screen with face/eyes)
-                        targetLookY = baseTargetY + 0.12; // Tilt up specifically to the eyes
+                        targetCamZ = 0.38; // Absolute maximum closeness
+                        targetLookY = baseTargetY + 0.14; // Locked perfectly on the eyes
                     } else if (currentEmotion === "angry") {
                         targetCamZ = 0.7; // Standard close-up
                         targetLookY = baseTargetY + 0.1; 
@@ -235,8 +235,9 @@
                     }
                 }
 
-                currentCamZ = THREE.MathUtils.lerp(currentCamZ, targetCamZ, deltaTime * 2.0);
-                currentLookY = THREE.MathUtils.lerp(currentLookY, targetLookY, deltaTime * 2.0);
+                // Cinematic, buttery smooth camera glides
+                currentCamZ = THREE.MathUtils.lerp(currentCamZ, targetCamZ, deltaTime * 1.0);
+                currentLookY = THREE.MathUtils.lerp(currentLookY, targetLookY, deltaTime * 1.0);
 
                 camera.position.set(0.0, currentLookY + 0.1, currentCamZ);
                 camera.lookAt(new THREE.Vector3(0, currentLookY, 0));
