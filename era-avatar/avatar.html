@@ -57,7 +57,7 @@
             return new THREE_VRM.VRMLoaderPlugin(parser);
         });
         
-        let activeModelFile = "AmericaBlondeG.vrm";
+        let activeModelFile = "ShortHairsG.vrm";
         
         async function pollConfig() {
             try {
@@ -230,20 +230,7 @@
                 const rightLowerArm = currentVrm.humanoid.getNormalizedBoneNode('rightLowerArm');
                 const rightHand = currentVrm.humanoid.getNormalizedBoneNode('rightHand');
 
-                // Organic Idle Sway
-                if (hips && spine && chest && head && neck) {
-                    hips.position.x = Math.sin(time * 0.5) * 0.02;
-                    spine.rotation.z = Math.sin(time * 0.5) * 0.02;
-                    chest.rotation.x = Math.sin(time * 1.5) * 0.01; 
-                    
-                    const driftX = Math.sin(time * 0.7) * 0.03;
-                    const driftY = Math.cos(time * 1.1) * 0.03;
-                    
-                    neck.rotation.y = currentRotX * 0.4 + driftX;
-                    neck.rotation.x = -currentRotY * 0.4 + driftY;
-                    head.rotation.y = currentRotX * 0.4;
-                    head.rotation.x = -currentRotY * 0.4;
-                }
+                // Idle sway removed to prevent Blender-exporter matrix explosions
 
                 // Procedural Lip Sync & Gestures
                 let targetA = 0, targetE = 0, targetO = 0;
