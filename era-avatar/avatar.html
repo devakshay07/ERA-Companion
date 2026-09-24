@@ -59,6 +59,11 @@
         
         let activeModelFile = "ShortHairsG.vrm";
         
+        // Dynamic Camera State
+        let baseTargetY = 1.35;
+        let currentCamZ = 3.2; // Default to full body
+        let currentLookY = 0.8;
+        
         async function pollConfig() {
             try {
                 const response = await fetch('config.json?t=' + new Date().getTime());
@@ -100,18 +105,13 @@
                     vrm.scene.updateMatrixWorld(true);
                     
                     // Bulletproof dynamic camera framing (Locks onto the physical skeleton, ignoring corrupted bounding boxes)
-                    let targetY = 1.35; // Fallback
+                    baseTargetY = 1.35; // Fallback
                     const headBone = currentVrm.humanoid.getNormalizedBoneNode('head');
                     if (headBone) {
                         const headPos = new THREE.Vector3();
                         headBone.getWorldPosition(headPos);
-                        targetY = headPos.y - 0.15; // Point camera at the chin/collarbone area
+                        baseTargetY = headPos.y - 0.15; // Point camera at the chin/collarbone area
                     }
-                    
-                    logError("Target Y set to: " + targetY);
-                    
-                    camera.position.set(0.0, targetY + 0.1, 1.3); // Pull camera further back
-                    camera.lookAt(new THREE.Vector3(0, targetY, 0));
                     
                     // Disable automatic lookAt to prevent Blender exorcist neck bugs
                     if (vrm.lookAt) vrm.lookAt.target = null;
@@ -212,6 +212,16 @@
             const time = clock.elapsedTime;
             
             if (currentVrm) {
+                // Dynamic Camera Framing based on speech state
+                let targetCamZ = isSpeaking ? 1.3 : 3.2;
+                let targetLookY = isSpeaking ? baseTargetY : (baseTargetY * 0.6); // Look lower for full body
+
+                currentCamZ = THREE.MathUtils.lerp(currentCamZ, targetCamZ, deltaTime * 2.0);
+                currentLookY = THREE.MathUtils.lerp(currentLookY, targetLookY, deltaTime * 2.0);
+
+                camera.position.set(0.0, currentLookY + 0.1, currentCamZ);
+                camera.lookAt(new THREE.Vector3(0, currentLookY, 0));
+
                 updateBlink(deltaTime);
                 
                 currentRotX = THREE.MathUtils.lerp(currentRotX, targetRotation.x, deltaTime * 5.0);
