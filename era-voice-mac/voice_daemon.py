@@ -97,6 +97,8 @@ def play_audio(audio_path: str) -> subprocess.Popen | None:
 def analyze_emotion(text: str) -> str:
     """Simple keyword-based sentiment analysis for ERA's persona."""
     text = text.lower()
+    if re.search(r'\b(stare|intense|closer|look at me|look closely|eyes|fascinating|wow)\b', text):
+        return "intense"
     if re.search(r'\b(idiot|stupid|hell|crap|fuck|damn|stop|bad|worst|hate)\b', text):
         return "angry"
     if re.search(r'\b(boom|success|perfect|brilliant|done|fixed|exactly|love|nice|haha|zero|hacker|cute|lol|lmao|boss)\b', text):

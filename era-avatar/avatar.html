@@ -217,9 +217,12 @@
                 let targetLookY = baseTargetY * 0.6; // Default look at waist
                 
                 if (isSpeaking) {
-                    if (currentEmotion === "angry") {
-                        targetCamZ = 0.7; // Extreme close-up (eyes and lips)
-                        targetLookY = baseTargetY + 0.1; // Tilt up to face
+                    if (currentEmotion === "intense") {
+                        targetCamZ = 0.55; // Maximum extreme close-up (fills screen with face/eyes)
+                        targetLookY = baseTargetY + 0.12; // Tilt up specifically to the eyes
+                    } else if (currentEmotion === "angry") {
+                        targetCamZ = 0.7; // Standard close-up
+                        targetLookY = baseTargetY + 0.1; 
                     } else if (currentEmotion === "surprised") {
                         targetCamZ = 0.9; // Very close
                         targetLookY = baseTargetY + 0.05;
