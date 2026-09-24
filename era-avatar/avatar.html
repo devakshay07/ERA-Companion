@@ -236,8 +236,11 @@
                 }
 
                 // Cinematic, buttery smooth camera glides
-                currentCamZ = THREE.MathUtils.lerp(currentCamZ, targetCamZ, deltaTime * 1.0);
-                currentLookY = THREE.MathUtils.lerp(currentLookY, targetLookY, deltaTime * 1.0);
+                // Use asymmetric interpolation: Zooming out (pulling back) feels visually abrupt due to perspective projection, 
+                // so we make the pull-out 3x slower than the zoom-in for a majestic cinematic release.
+                let zoomSpeed = (targetCamZ > currentCamZ) ? 0.35 : 1.2;
+                currentCamZ = THREE.MathUtils.lerp(currentCamZ, targetCamZ, deltaTime * zoomSpeed);
+                currentLookY = THREE.MathUtils.lerp(currentLookY, targetLookY, deltaTime * zoomSpeed);
 
                 camera.position.set(0.0, currentLookY + 0.1, currentCamZ);
                 camera.lookAt(new THREE.Vector3(0, currentLookY, 0));
