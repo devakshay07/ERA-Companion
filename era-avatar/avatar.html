@@ -13,6 +13,7 @@
     <script src="https://unpkg.com/three@0.146.0/build/three.js"></script>
     <script src="https://unpkg.com/three@0.146.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://unpkg.com/@pixiv/three-vrm@1.0.9/lib/three-vrm.js"></script>
+    <script src="https://unpkg.com/@pixiv/three-vrm-animation@1.0.9/lib/three-vrm-animation.js"></script>
     
     <script>
         function logError(msg) {
@@ -63,6 +64,13 @@
         let baseTargetY = 1.35;
         let currentCamZ = 3.2; // Default to full body
         let currentLookY = 0.8;
+        
+        // Animation State
+        let currentMixer = null;
+        let isDancing = false;
+        let currentDanceAction = null;
+        const vrmaLoader = new THREE.GLTFLoader();
+        vrmaLoader.register((parser) => new THREE_VRM_ANIMATION.VRMAnimationLoaderPlugin(parser));
         
         async function pollConfig() {
             try {
@@ -122,6 +130,21 @@
                     if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
                     const rightUpperArm = currentVrm.humanoid.getNormalizedBoneNode('rightUpperArm');
                     if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
+                    
+                    // Load the custom animation!
+                    vrmaLoader.load('animations/dance.vrma', (vrmaGltf) => {
+                        const vrmAnimation = vrmaGltf.userData.vrmAnimations[0];
+                        if (vrmAnimation) {
+                            currentMixer = new THREE.AnimationMixer(vrm.scene);
+                            const clip = vrmAnimation.createAnimationClip(vrm);
+                            currentDanceAction = currentMixer.clipAction(clip);
+                            currentDanceAction.play();
+                            isDancing = true;
+                            logError("Animation loaded: animations/dance.vrma");
+                        }
+                    }, undefined, (err) => {
+                        logError("Animation failed to load: " + err);
+                    });
                     
                     logError("Model loaded successfully: " + url);
                 },
@@ -260,13 +283,15 @@
                 const rightHand = currentVrm.humanoid.getNormalizedBoneNode('rightHand');
 
                 // Manual safe lookAt that doesn't explode on Blender bones
-                if (head) {
-                    head.rotation.y = currentRotX * 0.4;
-                    head.rotation.x = -currentRotY * 0.4;
-                }
-                if (neck) {
-                    neck.rotation.y = currentRotX * 0.2;
-                    neck.rotation.x = -currentRotY * 0.2;
+                if (!isDancing) {
+                    if (head) {
+                        head.rotation.y = currentRotX * 0.4;
+                        head.rotation.x = -currentRotY * 0.4;
+                    }
+                    if (neck) {
+                        neck.rotation.y = currentRotX * 0.2;
+                        neck.rotation.x = -currentRotY * 0.2;
+                    }
                 }
                 
                 // Idle sway removed to prevent Blender-exporter matrix explosions
@@ -329,10 +354,16 @@
                 }
 
                 // Force arms into a natural resting A-pose instead of a rigid T-pose
-                const leftUpperArm = currentVrm.humanoid.getNormalizedBoneNode('leftUpperArm');
-                if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
+                if (!isDancing) {
+                    const leftUpperArm = currentVrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+                    if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
+                    
+                    if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
+                }
                 
-                if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
+                if (currentMixer) {
+                    currentMixer.update(deltaTime);
+                }
                 
                 if (currentVrm.springBoneManager) {
                     currentVrm.springBoneManager.update(deltaTime);
