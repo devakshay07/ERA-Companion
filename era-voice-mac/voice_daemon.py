@@ -142,6 +142,10 @@ def check_interrupt() -> bool:
     return False
 
 async def speak_response(text: str):
+    if os.path.exists('/tmp/era_speaker.lock'):
+        log_info("Speaker is muted, skipping TTS.")
+        return
+
     """Stream-speak a full response by pre-buffering the next sentence."""
     sentences = split_into_sentences(text)
     if not sentences:

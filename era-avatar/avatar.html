@@ -6,7 +6,60 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: transparent; font-family: monospace; cursor: pointer; }
         canvas { display: block; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1;}
-    </style>
+    
+        #audio-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            display: flex;
+            gap: 15px;
+            background: rgba(30, 30, 30, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 8px 16px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            opacity: 0;
+            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        body:hover #audio-controls {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
+        }
+        .control-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.9);
+            cursor: pointer;
+            outline: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            transition: background 0.2s, color 0.2s;
+        }
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .control-btn svg {
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .control-btn:active svg {
+            transform: scale(0.85);
+        }
+        .muted {
+            color: #ff453a;
+            background: rgba(255, 69, 58, 0.1);
+        }
+        .muted:hover {
+            background: rgba(255, 69, 58, 0.2);
+        }
+</style>
 </head>
 <body>
     <div id="debug" style="position:absolute; top:0; left:0; color:red; font-size:20px; z-index:9999; background:rgba(0,0,0,0.5); padding:10px; display:none;"></div>
@@ -382,5 +435,64 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
+
+    <div id="audio-controls">
+        <button id="mic-btn" class="control-btn" onclick="toggleMic()">
+            <svg id="mic-icon" viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="22"></line>
+            </svg>
+        </button>
+        <button id="speaker-btn" class="control-btn" onclick="toggleSpeaker()">
+            <svg id="speaker-icon" viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+        </button>
+    </div>
+
+    <script>
+        const MIC_ON = '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line>';
+        const MIC_OFF = '<line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path><line x1="12" y1="19" x2="12" y2="22"></line>';
+        const SPEAKER_ON = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>';
+        const SPEAKER_OFF = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>';
+
+        function updateUI(id, isMuted, onSVG, offSVG) {
+            let btn = document.getElementById(id + '-btn');
+            let icon = document.getElementById(id + '-icon');
+            icon.innerHTML = isMuted ? offSVG : onSVG;
+            if (isMuted) btn.classList.add('muted');
+            else btn.classList.remove('muted');
+        }
+
+        async function fetchStatus() {
+            try {
+                let res = await fetch('/status');
+                let data = await res.json();
+                updateUI('mic', data.mic_muted, MIC_ON, MIC_OFF);
+                updateUI('speaker', data.speaker_muted, SPEAKER_ON, SPEAKER_OFF);
+            } catch(e) {}
+        }
+
+        async function toggleMic() {
+            try {
+                let res = await fetch('/toggle_mic');
+                let data = await res.json();
+                updateUI('mic', data.muted, MIC_ON, MIC_OFF);
+            } catch(e) {}
+        }
+
+        async function toggleSpeaker() {
+            try {
+                let res = await fetch('/toggle_speaker');
+                let data = await res.json();
+                updateUI('speaker', data.muted, SPEAKER_ON, SPEAKER_OFF);
+            } catch(e) {}
+        }
+
+        setTimeout(fetchStatus, 500);
+    </script>
+
 </body>
 </html>

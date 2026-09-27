@@ -6,6 +6,17 @@ import socketserver
 import time
 import json
 
+import fcntl
+
+lock_file_path = os.path.expanduser("~/.era_avatar.lock")
+lock_file_fd = open(lock_file_path, 'w')
+try:
+    fcntl.lockf(lock_file_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except IOError:
+    print("Another instance of ERA Avatar is already running. Exiting.")
+    sys.exit(0)
+
+
 VOICE_DIR = os.path.expanduser("~/.gemini/antigravity/era_voice")
 SPEAKING_FLAG = os.path.join(VOICE_DIR, ".era_speaking")
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
@@ -19,6 +30,46 @@ def start_server_and_bridge():
     class QuietHandler(Handler):
         def log_message(self, format, *args):
             pass
+
+        def do_GET(self):
+            if self.path.startswith('/toggle_mic'):
+                lock_file = '/tmp/era_mic.lock'
+                muted = False
+                if os.path.exists(lock_file):
+                    os.remove(lock_file)
+                else:
+                    with open(lock_file, 'w') as f: f.write('1')
+                    muted = True
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'muted': muted}).encode())
+                return
+            elif self.path.startswith('/toggle_speaker'):
+                lock_file = '/tmp/era_speaker.lock'
+                muted = False
+                if os.path.exists(lock_file):
+                    os.remove(lock_file)
+                else:
+                    with open(lock_file, 'w') as f: f.write('1')
+                    muted = True
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'muted': muted}).encode())
+                return
+            elif self.path.startswith('/status'):
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'mic_muted': os.path.exists('/tmp/era_mic.lock'),
+                    'speaker_muted': os.path.exists('/tmp/era_speaker.lock')
+                }).encode())
+                return
+                
+            return super().do_GET()
+
             
     socketserver.TCPServer.allow_reuse_address = True
     

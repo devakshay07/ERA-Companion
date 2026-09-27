@@ -84,37 +84,51 @@ def type_text_applescript(text: str):
 
 
 def is_hallucination(text: str) -> bool:
-    """Detect common Whisper hallucination patterns."""
+    """Detect common Whisper hallucination patterns and background noise."""
     t = text.lower().strip()
+    
+    # 1. Too short or empty
+    if len(t) < 2:
+        return True
+        
+    # 2. Single words that are likely noise interpretations
+    words = t.split()
+    if len(words) == 1:
+        # If it's a single word and very short, probably noise
+        if len(words[0]) < 3:
+            return True
+        # Ignore common single word hallucinations
+        if words[0] in ['you', 'oh', 'ah', 'umm', 'so', 'and', 'but', 'the', 'a', 'ok', 'okay', 'yeah', 'yes']:
+            return True
 
-    # Known garbage phrases
+    # 3. Known garbage phrases from Whisper training data
     garbage = [
-        "subscribe", "thanks for watching", "thank you for watching",
-        "amara.org", "transcribed by", "copyright", "by subscrip",
+        "subscribe", "thanks for watching", "thank you for watching", "watching next",
+        "amara.org", "transcribed by", "copyright", "by subscrip", "watching",
         "i'm going to", "the end", "bye bye", "see you next time",
-        "please like", "please subscribe"
+        "please like", "please subscribe", "thank you", "thanks", "subtitles",
+        "captioning", "captions", "next video", "click the"
     ]
     for phrase in garbage:
         if phrase in t:
             return True
-
-    # Repetition detector
-    words = t.split()
-    if len(words) > 6:
-        unique_ratio = len(set(words)) / len(words)
+            
+    # 4. Recurring single alphabets or extreme repetition (e.g. "a a a a")
+    if len(words) > 3:
+        unique_words = set(words)
+        # If the entire sentence is just 1 or 2 unique words repeated over and over
+        if len(unique_words) <= 2:
+            return True
+        unique_ratio = len(unique_words) / len(words)
         if unique_ratio < 0.4:
             return True
 
-    # Too short to be meaningful
-    if len(t) < 3:
+    # 5. Lack of vowels (meaningless static interpreted as consonants)
+    vowels = set('aeiouy')
+    if not any(char in vowels for char in t):
         return True
-
-    # Starts with bracket (Whisper metadata)
-    if t.startswith("[") or t.startswith("("):
-        return True
-
+        
     return False
-
 
 def monitor_for_interrupt():
     """
@@ -232,6 +246,10 @@ def record_and_transcribe():
 
     # Wait for voice activity
     while True:
+        if os.path.exists('/tmp/era_mic.lock'):
+            time.sleep(0.5)
+            continue
+
         # If TTS starts speaking while we're waiting, switch to interrupt mode
         if is_tts_speaking():
             monitor_for_interrupt()
@@ -250,6 +268,10 @@ def record_and_transcribe():
     # Record until silence
     silence_start = None
     while True:
+        if os.path.exists('/tmp/era_mic.lock'):
+            time.sleep(0.5)
+            continue
+
         # Check if TTS started during our recording (shouldn't happen, but safety)
         if is_tts_speaking():
             log_info("tts_started_during_recording_aborting")
@@ -313,6 +335,10 @@ def main():
 
     with stream:
         while True:
+            if os.path.exists('/tmp/era_mic.lock'):
+                time.sleep(0.5)
+                continue
+
             try:
                 # If TTS is speaking, run interrupt monitor instead of transcribing
                 if is_tts_speaking():
