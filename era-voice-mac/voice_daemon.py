@@ -1,3 +1,14 @@
+
+import fcntl
+import sys
+import os
+try:
+    _singleton_lock_file = open('/tmp/era_voice_daemon.lock', 'w')
+    fcntl.lockf(_singleton_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except IOError:
+    print("Instance already running. Exiting strict singleton lock.")
+    sys.exit(0)
+
 #!/usr/bin/env python3
 """
 ERA Voice Daemon v3.0 — Streaming Sentence-Level TTS

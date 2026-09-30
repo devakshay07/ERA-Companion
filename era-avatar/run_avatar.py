@@ -1,36 +1,34 @@
-import webview
+
+import fcntl
+import sys
+import os
+try:
+    _singleton_lock_file = open('/tmp/era_run_avatar.lock', 'w')
+    fcntl.lockf(_singleton_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except IOError:
+    print("Instance already running. Exiting strict singleton lock.")
+    sys.exit(0)
+
 import os
 import threading
 import http.server
 import socketserver
 import time
 import json
-
-import fcntl
-
-lock_file_path = os.path.expanduser("~/.era_avatar.lock")
-lock_file_fd = open(lock_file_path, 'w')
-try:
-    fcntl.lockf(lock_file_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except IOError:
-    print("Another instance of ERA Avatar is already running. Exiting.")
-    sys.exit(0)
-
+import subprocess
 
 VOICE_DIR = os.path.expanduser("~/.gemini/antigravity/era_voice")
 SPEAKING_FLAG = os.path.join(VOICE_DIR, ".era_speaking")
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
 
-# Run a quick local HTTP server and state bridge
 def start_server_and_bridge():
     PORT = 8000
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    Handler = http.server.SimpleHTTPRequestHandler
     
-    class QuietHandler(Handler):
+    class QuietHandler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, format, *args):
             pass
-
+            
         def do_GET(self):
             if self.path.startswith('/toggle_mic'):
                 lock_file = '/tmp/era_mic.lock'
@@ -69,7 +67,6 @@ def start_server_and_bridge():
                 return
                 
             return super().do_GET()
-
             
     socketserver.TCPServer.allow_reuse_address = True
     
@@ -83,8 +80,14 @@ def start_server_and_bridge():
     threading.Thread(target=serve, daemon=True).start()
     
     # State Bridge Loop
+    LISTENING_FLAG = os.path.join(VOICE_DIR, ".era_listening")
+    SUBTITLE_FLAG = os.path.join(VOICE_DIR, ".era_subtitle")
+    
     with open(STATE_FILE, 'w') as f:
-        json.dump({"speaking": False, "emotion": "neutral"}, f)
+        json.dump({"speaking": False, "listening": False, "emotion": "neutral", "subtitle": ""}, f)
+        
+    subtitle_text = ""
+    subtitle_time = 0
         
     last_state = None
     current_emotion = "neutral"
@@ -103,7 +106,23 @@ def start_server_and_bridge():
             else:
                 is_speaking = False
                 
-            current_state = {"speaking": is_speaking, "emotion": current_emotion}
+            is_listening = False # Ripped out active listening
+            
+            # Read subtitle
+            if os.path.exists(SUBTITLE_FLAG):
+                try:
+                    with open(SUBTITLE_FLAG, 'r') as sf:
+                        subtitle_text = sf.read().strip()
+                    os.remove(SUBTITLE_FLAG)
+                    subtitle_time = time.time()
+                except:
+                    pass
+            
+            # Clear subtitle after 5 seconds
+            if subtitle_text and (time.time() - subtitle_time > 5.0):
+                subtitle_text = ""
+                
+            current_state = {"speaking": is_speaking, "listening": is_listening, "emotion": current_emotion, "subtitle": subtitle_text}
             if current_state != last_state:
                 with open(STATE_FILE, 'w') as f:
                     json.dump(current_state, f)
@@ -113,32 +132,10 @@ def start_server_and_bridge():
             time.sleep(0.5)
 
 if __name__ == '__main__':
-    # Start server in background
+    # Start the HTTP server to serve the assets
     server_thread = threading.Thread(target=start_server_and_bridge, daemon=True)
     server_thread.start()
 
-    # Calculate bottom-left coordinates
-    try:
-        import AppKit
-        screen = AppKit.NSScreen.mainScreen().frame()
-        screen_height = int(screen.size.height)
-        y_pos = screen_height - 900 - 50 # 50px padding from bottom
-    except Exception:
-        y_pos = 200
-
-    # Create transparent, frameless window (Larger frame for gestures)
-    import random
-    window = webview.create_window(
-        'ERA Avatar',
-        f'http://localhost:8000/avatar.html?v={random.randint(1, 100000)}',
-        transparent=True,
-        frameless=True,
-        on_top=True,
-        width=1000,
-        height=900,
-        x=20,
-        y=y_pos
-    )
-    
-    # Start the GUI loop
-    webview.start(gui='cocoa')
+    print("ERA HTTP backend started. Launching native Swift shell...")
+    # Launch the native Swift app that actually renders the UI
+    subprocess.call(["/Users/akshaybhagat/Documents/ERA'S ARENA/ERA_Avatar"])
